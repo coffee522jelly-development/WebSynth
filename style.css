@@ -1,0 +1,241 @@
+/* General Body and Layout */
+body {
+    font-family: 'Arial', sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: #333; /* Dark background for contrast */
+    color: #fff; /* White text */
+    margin: 0;
+    padding: 15px;
+    min-height: 100vh;
+    box-sizing: border-box;
+}
+
+h1#app-title {
+    color: #00d8ff;
+    text-shadow: 0 0 5px #00d8ff, 0 0 10px #00d8ff;
+    margin-bottom: 20px;
+}
+
+/* Control Panel Styling */
+#control-panel {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); /* Responsive columns */
+    gap: 20px;
+    background-color: #444; /* Slightly lighter than body */
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    margin-bottom: 30px;
+    width: 95%;
+    max-width: 1200px; /* Max width for very large screens */
+}
+
+#control-panel section {
+    background-color: #555; /* Background for each section */
+    padding: 15px;
+    border: 1px solid #666;
+    border-radius: 8px;
+    box-shadow: inset 0 0 5px rgba(0,0,0,0.2);
+}
+
+#control-panel h2 {
+    margin-top: 0;
+    font-size: 1.3em;
+    color: #00d8ff; /* Accent color for headings */
+    border-bottom: 1px solid #00aaff;
+    padding-bottom: 5px;
+    margin-bottom: 15px;
+}
+
+#control-panel label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 0.95em;
+    color: #ddd;
+}
+
+#control-panel input[type="range"] {
+    width: 100%;
+    margin-bottom: 10px;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 8px;
+    background: #333;
+    outline: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+#control-panel input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    background: #00d8ff;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid #222;
+}
+
+#control-panel input[type="range"]::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: #00d8ff;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid #222;
+}
+
+#control-panel select {
+    width: 100%;
+    padding: 8px;
+    margin-bottom: 10px;
+    background-color: #333;
+    color: #fff;
+    border: 1px solid #666;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+#oscillator label { /* For radio buttons to appear inline */
+    display: inline-block;
+    margin-right: 15px;
+    color: #ccc;
+}
+#oscillator input[type="radio"] {
+    margin-right: 5px;
+    vertical-align: middle;
+}
+
+
+/* Keyboard Panel Styling */
+#keyboard-panel {
+    display: flex; /* Arrange keys in a row */
+    flex-wrap: nowrap;
+    position: relative; /* For positioning black keys */
+    background-color: #2a2a2a; /* Darker background for the keyboard base */
+    padding: 10px; /* Padding around the keys */
+    border-radius: 8px;
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
+    width: 95%;
+    max-width: 1000px; /* Max width for keyboard */
+    height: 180px; /* Fixed height for the keyboard area */
+    margin: 0 auto; /* Center the keyboard */
+}
+
+.key {
+    box-sizing: border-box;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    font-size: 0.7em; /* Smaller text on keys */
+    user-select: none;
+    border-radius: 0 0 5px 5px; /* Rounded bottom edges */
+    transition: background-color 0.1s ease; /* Smooth activation */
+}
+
+.white-key {
+    background-color: #f8f8f8;
+    color: #333;
+    width: 40px;
+    height: 100%;
+    border: 1px solid #bbb;
+    border-top: 1px solid #ddd;
+    margin-right: -1px; /* Overlap borders slightly */
+    z-index: 1;
+}
+
+.black-key {
+    background: linear-gradient(to bottom, #333 0%, #111 100%);
+    color: #f0f0f0;
+    width: 24px;
+    height: 60%;
+    position: absolute;
+    z-index: 2;
+    border: 1px solid #000;
+    border-top:none; /* Black keys often look better without top border */
+    box-shadow: -1px -1px 2px rgba(255,255,255,0.2) inset, 0 -2px 2px 3px rgba(0,0,0,0.6) inset, 0 1px 2px rgba(0,0,0,0.4);
+}
+
+/* Dynamic positioning for black keys will be approximated here.
+   Precise positioning often requires JS if key widths/margins are complex.
+   This CSS assumes white keys are of fixed width (40px).
+   The margin-left places the black key center relative to the white key's right edge.
+*/
+.black-key[data-note-name="C#"] { left: calc(1 * 40px - 12px); } /* (whiteKeyWidth * 1) - (blackKeyWidth / 2) */
+.black-key[data-note-name="D#"] { left: calc(2 * 40px - 12px); }
+/* F#, G#, A# are after E and B which don't have black keys after them */
+.black-key[data-note-name="F#"] { left: calc(4 * 40px - 12px); } /* After 3 white keys (C,D,E) then F */
+.black-key[data-note-name="G#"] { left: calc(5 * 40px - 12px); }
+.black-key[data-note-name="A#"] { left: calc(6 * 40px - 12px); }
+
+/* Adjust for subsequent octaves - this part is tricky without JS generating positions */
+/* For a simple 2-octave C3-B4 keyboard, the above might cover C#3, D#3, F#3, G#3, A#3 */
+/* And then C#4, D#4, F#4, G#4, A#4 need offsets by 7 * whiteKeyWidth */
+.black-key[data-octave="3"][data-note-name="C#"] { left: calc(1 * 40px - 12px); }
+.black-key[data-octave="3"][data-note-name="D#"] { left: calc(2 * 40px - 12px); }
+.black-key[data-octave="3"][data-note-name="F#"] { left: calc(4 * 40px - 12px); }
+.black-key[data-octave="3"][data-note-name="G#"] { left: calc(5 * 40px - 12px); }
+.black-key[data-octave="3"][data-note-name="A#"] { left: calc(6 * 40px - 12px); }
+
+/* Octave 4 keys (assuming 2 octaves starting at C3, so 2nd octave is C4) */
+/* Offset by 7 white keys (C,D,E,F,G,A,B) = 7 * 40px = 280px */
+.black-key[data-octave="4"][data-note-name="C#"] { left: calc(280px + 1 * 40px - 12px); }
+.black-key[data-octave="4"][data-note-name="D#"] { left: calc(280px + 2 * 40px - 12px); }
+.black-key[data-octave="4"][data-note-name="F#"] { left: calc(280px + 4 * 40px - 12px); }
+.black-key[data-octave="4"][data-note-name="G#"] { left: calc(280px + 5 * 40px - 12px); }
+.black-key[data-octave="4"][data-note-name="A#"] { left: calc(280px + 6 * 40px - 12px); }
+
+
+.key.active {
+    background-color: #00d8ff; /* Active color for all keys */
+    box-shadow: inset 0 0 5px #007bff, 0 0 3px #00d8ff;
+    color: #fff; /* Ensure text is visible on active black keys */
+}
+.black-key.active {
+    background: #00aaff; /* Slightly different active for black keys if desired */
+}
+
+/* Start Button */
+#start-synth-button { /* If we give the button an ID */
+    padding: 12px 25px;
+    font-size: 1.2em;
+    color: white;
+    background-color: #007bff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    margin-bottom: 20px; /* Space it out if it's visible initially */
+}
+#start-synth-button:hover {
+    background-color: #0056b3;
+}
+
+/* Ensure this button styling applies to the dynamically created start button if it doesn't have an ID */
+/* The JS creates a button without an ID, so let's style it by tag if it's the only one like it */
+body > button { /* This is a bit broad, but targets the button added to body */
+    padding: 12px 25px;
+    font-size: 1.2em;
+    color: white;
+    background-color: #00d8ff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.3s ease, box-shadow 0.3s ease;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+    margin-bottom: 20px; /* Space it out */
+}
+body > button:hover {
+    background-color: #00aaff;
+    box-shadow: 0 6px 12px rgba(0,0,0,0.4);
+}
+
+/* Hide scrollbar if keyboard overflows slightly, or ensure panel width is sufficient */
+#keyboard-panel {
+    overflow-x: auto; /* Add scroll if keys exceed panel width */
+}
