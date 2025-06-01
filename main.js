@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Initialize Audio Context and Master Gain ---
     function initAudio() {
+        // console.log('DEBUG_INIT: initAudio() called.');
         try {
             audioContext = new (window.AudioContext || window.webkitAudioContext)();
             masterGain = audioContext.createGain();
@@ -54,6 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setupFilter();
         setupLFO();
         setupKeyboard();
+        // console.log('DEBUG_INIT: Attempting to call setupSequencer().');
         setupSequencer(); // Initialize sequencer UI and data
 
         console.log('Synthesizer setup complete.');
@@ -494,35 +496,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.log('AudioContext resumed successfully.');
                 if (filterNode && masterGain) {
                     filterNode.connect(masterGain);
-                    // console.log('Global connection: filterNode -> masterGain established post-resume.');
-                } else {
-                    // console.error('filterNode or masterGain not ready for global connection post-resume.');
                 }
                 setupMidi();
 
                 if (seqPlayPauseButton) {
                     seqPlayPauseButton.disabled = false;
-                    // console.log('DEBUG_SEQ_PLAY_BTN: Sequencer Play/Pause button explicitly enabled.');
+                    // console.log('DEBUG_SEQ_PLAY_BTN: Sequencer Play/Pause button explicitly enabled (after resume).');
                 } else {
                     // console.error('DEBUG_SEQ_PLAY_BTN: seqPlayPauseButton element not found when trying to enable it (after resume).');
                 }
-                // console.log('Synthesizer fully initialized and ready after AudioContext resume.');
-
             }).catch(e => console.error("Error resuming AudioContext:", e));
         } else if (audioContext.state === 'running') {
             // console.log('AudioContext already running.');
             if (filterNode && masterGain) {
                 filterNode.connect(masterGain);
-                 // console.log('Global connection: filterNode -> masterGain (context already running).');
             }
             setupMidi();
             if (seqPlayPauseButton) {
                  seqPlayPauseButton.disabled = false;
-                 // console.log('DEBUG_SEQ_PLAY_BTN: Sequencer Play/Pause button explicitly enabled (context already running).');
+                 // console.log('DEBUG_SEQ_PLAY_BTN: Sequencer Play/Pause button explicitly enabled (already running).');
             } else {
                 // console.error('DEBUG_SEQ_PLAY_BTN: seqPlayPauseButton element not found when trying to enable it (context already running).');
             }
-            // console.log('Synthesizer ready (AudioContext already running).');
         } else {
             console.error(`Unexpected AudioContext state: ${audioContext.state}. Sequencer functions might not work.`);
         }
@@ -537,6 +532,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Sequencer Setup and UI Logic ---
     function setupSequencer() {
+        // console.log('DEBUG_INIT: setupSequencer() called.');
         // Get DOM Elements
         seqPlayPauseButton = document.getElementById('seq-play-pause-button');
         seqTempoSlider = document.getElementById('seq-tempo');
@@ -619,14 +615,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isPlaying && audioContext && audioContext.state === 'running') {
             playStep();
         } else if (isPlaying) {
-            // console.warn("DEBUG_SEQ_PLAY_BTN: startSequencerPlayback called while isPlaying is true, but AudioContext is not running.");
+            console.warn("DEBUG_SEQ_PLAY_BTN: startSequencerPlayback called while isPlaying is true, but AudioContext is not running.");
         }
 
         timerID = setInterval(playStep, intervalMilliseconds);
     }
 
     function stopSequencerPlayback() {
-        // console.log('DEBUG_SEQ_PLAY_BTN: stopSequencerPlayback function entered.');
+        console.log('DEBUG_SEQ_PLAY_BTN: stopSequencerPlayback function entered.');
         clearInterval(timerID);
         timerID = null;
 
@@ -734,27 +730,59 @@ document.addEventListener('DOMContentLoaded', () => {
             pitchInput.name = `step-pitch-${i}`;
             pitchInput.min = "24"; // C1
             pitchInput.max = "96"; // C7
+            pitchInput.step = "1"; // Explicitly set step to 1 for integer input
             pitchInput.value = sequencerData[i].pitch; // Reflect data
             pitchInput.title = `Step ${i + 1} Pitch (MIDI)`;
-            pitchInput.addEventListener('input', (e) => { // 'input' for immediate feedback, 'change' for after blur
-                let pitchValue = parseInt(e.target.value);
-                if (isNaN(pitchValue)) pitchValue = 60; // Default if invalid
-                if (pitchValue < parseInt(pitchInput.min)) pitchValue = parseInt(pitchInput.min);
-                if (pitchValue > parseInt(pitchInput.max)) pitchValue = parseInt(pitchInput.max);
-                e.target.value = pitchValue; // Correct the input field if out of bounds
-                sequencerData[i].pitch = pitchValue;
-                console.log(`Step ${i} pitch: ${sequencerData[i].pitch}`);
+
+            pitchInput.addEventListener('input', (e) => {
+                const stepIndex = i; // Ensure 'i' is correctly captured if this listener's scope changes
+                let rawValue = e.target.value;
+                let pitchValue = parseInt(rawValue, 10);
+                const min = parseInt(pitchInput.min, 10);
+                const max = parseInt(pitchInput.max, 10);
+
+                // Only update sequencerData if the value is a valid number within range (or empty for intermediate typing)
+                // Allow empty input field during typing
+                if (rawValue === '') {
+                    // Potentially set a default in sequencerData or handle on 'change'
+                    // For now, do nothing on 'input' if empty, let 'change' handle final validation
+                    return;
+                }
+
+                if (!isNaN(pitchValue)) {
+                    // Clamp the value for the data model, but don't immediately force e.target.value
+                    // This allows user to type numbers like "1" then "12" even if "1" is below min.
+                    let clampedValue = pitchValue;
+                    if (clampedValue < min) clampedValue = min;
+                    if (clampedValue > max) clampedValue = max;
+
+                    sequencerData[stepIndex].pitch = clampedValue;
+                    // console.log(`Input event: Step ${stepIndex} pitch data updated to ${clampedValue}`);
+                }
+                // No e.target.value = pitchValue; here, to allow smoother typing.
             });
-            // Ensure value is within bounds on blur too
-             pitchInput.addEventListener('change', (e) => {
-                let pitchValue = parseInt(e.target.value);
-                 if (isNaN(pitchValue)) pitchValue = 60;
-                if (pitchValue < parseInt(pitchInput.min)) pitchValue = parseInt(pitchInput.min);
-                if (pitchValue > parseInt(pitchInput.max)) pitchValue = parseInt(pitchInput.max);
-                e.target.value = pitchValue;
-                if (sequencerData[i].pitch !== pitchValue) { // Avoid redundant logging if 'input' event already handled it
-                    sequencerData[i].pitch = pitchValue;
-                    console.log(`Step ${i} pitch (on change): ${sequencerData[i].pitch}`);
+
+            pitchInput.addEventListener('change', (e) => {
+                const stepIndex = i; // Ensure 'i' is correctly captured
+                let pitchValue = parseInt(e.target.value, 10);
+                const min = parseInt(pitchInput.min, 10);
+                const max = parseInt(pitchInput.max, 10);
+
+                if (isNaN(pitchValue)) {
+                    pitchValue = sequencerData[stepIndex].pitch; // Revert to last valid stored pitch if input is invalid (e.g. empty or text)
+                } else if (pitchValue < min) {
+                    pitchValue = min;
+                } else if (pitchValue > max) {
+                    pitchValue = max;
+                }
+                // Ensure it's an integer (step="1" should enforce this, but good to be sure)
+                pitchValue = Math.round(pitchValue);
+
+                e.target.value = pitchValue; // Update UI with the final validated/clamped value
+
+                if (sequencerData[stepIndex].pitch !== pitchValue) {
+                    sequencerData[stepIndex].pitch = pitchValue;
+                    console.log(`Step ${stepIndex} pitch (on change): ${sequencerData[stepIndex].pitch}`);
                 }
             });
             stepDiv.appendChild(pitchInput);
