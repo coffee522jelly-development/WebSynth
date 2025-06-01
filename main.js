@@ -24,6 +24,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // DOM Elements for Sequencer
     let seqPlayPauseButton, seqTempoSlider, seqTempoValueDisplay, seqCurrentStepDisplay, sequencerGrid;
+    let metronomeToggleButton; // For Metronome UI
+
+    // Metronome State
+    let isMetronomeOn = false;
+
+    // --- Drum Machine Specific Variables ---
+    let drumMachineGridElement;
+    let drumMachineData = []; // Stores the state of each drum step (0=off, 1=BD, 2=HH, 3=SN)
+    let drumStepCellElements = []; // Stores DOM elements for drum step cells for highlighting
+    const DRUM_STATE_OFF = 0;
+    const DRUM_STATE_BD = 1;  // Bass Drum
+    const DRUM_STATE_HH = 2;  // Hi-Hat
+    const DRUM_STATE_SN = 3;  // Snare
+    const NUM_DRUM_STATES = 4;
+    const drumStateClasses = {
+        [DRUM_STATE_OFF]: 'drum-step-off',
+        [DRUM_STATE_BD]: 'drum-step-bd',
+        [DRUM_STATE_HH]: 'drum-step-hh',
+        [DRUM_STATE_SN]: 'drum-step-sn'
+    };
+    // NUM_STEPS (32) is already defined under Sequencer Specific Variables and will be reused.
 
 
     // --- Initialize Audio Context and Master Gain ---
@@ -55,13 +76,112 @@ document.addEventListener('DOMContentLoaded', () => {
         setupFilter();
         setupLFO();
         setupKeyboard();
-        // console.log('DEBUG_INIT: Attempting to call setupSequencer().');
-        setupSequencer(); // Initialize sequencer UI and data
+        setupSequencer();
+        setupDrumMachine(); // Initialize drum machine UI and data
+        // setupMetronomeControls() is called in the startButton listener after context is running.
 
         console.log('Synthesizer setup complete.');
     }
 
     // --- Oscillator ---
+    // Drum sound synthesis functions are placed before setupOscillator for definition before potential use.
+    // (Although they are typically called by sequencer or other UI, not directly by setup functions before them)
+
+    function playBassDrum() {
+        if (!audioContext || audioContext.state !== 'running' || !masterGain) return;
+        const now = audioContext.currentTime;
+        const osc = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+
+        osc.type = 'triangle'; // Good for punchy bass
+        osc.frequency.setValueAtTime(150, now); // Start fairly high for the "thump"
+        osc.frequency.exponentialRampToValueAtTime(50, now + 0.15); // Quick drop to the fundamental
+
+        gain.gain.setValueAtTime(0.9, now); // Start with high gain
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.25); // Decay over ~250ms
+
+        osc.connect(gain);
+        gain.connect(masterGain);
+
+        osc.start(now);
+        osc.stop(now + 0.3); // Stop osc slightly after gain envelope finishes
+    }
+
+    function playSnare() {
+        if (!audioContext || audioContext.state !== 'running' || !masterGain) return;
+        const now = audioContext.currentTime;
+
+        // Noise component for the "snap"
+        const noiseBufferSize = audioContext.sampleRate * 0.2; // 0.2 seconds of noise
+        const noiseBuffer = audioContext.createBuffer(1, noiseBufferSize, audioContext.sampleRate);
+        const noiseOutput = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < noiseBufferSize; i++) {
+            noiseOutput[i] = (Math.random() * 2 - 1) * 0.6; // Adjust noise volume
+        }
+        const noiseSource = audioContext.createBufferSource();
+        noiseSource.buffer = noiseBuffer;
+
+        const noiseFilter = audioContext.createBiquadFilter();
+        noiseFilter.type = 'bandpass';
+        noiseFilter.frequency.setValueAtTime(1500, now); // Center frequency for snare character
+        noiseFilter.Q.setValueAtTime(15, now); // Higher Q for more resonance/sharper snap
+
+        const noiseGain = audioContext.createGain();
+        noiseGain.gain.setValueAtTime(0.8, now); // Noise component volume
+        noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.15); // Quick decay for noise
+
+        noiseSource.connect(noiseFilter);
+        noiseFilter.connect(noiseGain);
+        noiseGain.connect(masterGain);
+
+        // Tonal component for the "body"
+        const toneOsc = audioContext.createOscillator();
+        toneOsc.type = 'triangle';
+        toneOsc.frequency.setValueAtTime(200, now); // Pitch of the snare's body
+
+        const toneGain = audioContext.createGain();
+        toneGain.gain.setValueAtTime(0.7, now); // Tone component volume
+        toneGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12); // Slightly shorter decay for tone
+
+        toneOsc.connect(toneGain);
+        toneGain.connect(masterGain);
+
+        noiseSource.start(now);
+        toneOsc.start(now);
+        noiseSource.stop(now + 0.2); // Stop buffer after envelope
+        toneOsc.stop(now + 0.15);    // Stop tone osc after envelope
+    }
+
+    function playHiHat() {
+        if (!audioContext || audioContext.state !== 'running' || !masterGain) return;
+        const now = audioContext.currentTime;
+
+        const noiseBufferSize = audioContext.sampleRate * 0.08; // Shorter for hi-hat
+        const noiseBuffer = audioContext.createBuffer(1, noiseBufferSize, audioContext.sampleRate);
+        const noiseOutput = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < noiseBufferSize; i++) {
+            noiseOutput[i] = (Math.random() * 2 - 1) * 0.4; // Adjust noise volume
+        }
+        const noiseSource = audioContext.createBufferSource();
+        noiseSource.buffer = noiseBuffer;
+
+        const hiPassFilter = audioContext.createBiquadFilter();
+        hiPassFilter.type = 'highpass';
+        hiPassFilter.frequency.setValueAtTime(7000, now); // High frequency for "tsss" sound
+        hiPassFilter.Q.setValueAtTime(5, now); // Moderate Q
+
+        const gain = audioContext.createGain();
+        gain.gain.setValueAtTime(0.4, now); // Hi-hat volume
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.06); // Very sharp decay
+
+        noiseSource.connect(hiPassFilter);
+        hiPassFilter.connect(gain);
+        gain.connect(masterGain);
+
+        noiseSource.start(now);
+        noiseSource.stop(now + 0.1); // Stop buffer slightly after gain envelope
+    }
+
     function setupOscillator() {
         const waveformRadios = document.querySelectorAll('input[name="waveform"]');
         let currentGlobalWaveform = 'sine'; // Default for new notes and UI
@@ -96,6 +216,99 @@ document.addEventListener('DOMContentLoaded', () => {
             drawWaveform(waveformCtx, currentGlobalWaveform, waveformCanvas.width, waveformCanvas.height);
         }
         console.log('Oscillator UI setup complete. Initial waveform:', currentGlobalWaveform);
+    }
+
+    // --- Drum Sound Synthesis ---
+    function playBassDrum() {
+        if (!audioContext || audioContext.state !== 'running' || !masterGain) return;
+        const now = audioContext.currentTime;
+        const osc = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(150, now);
+        osc.frequency.exponentialRampToValueAtTime(50, now + 0.15);
+
+        gain.gain.setValueAtTime(0.8, now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.25);
+
+        osc.connect(gain);
+        gain.connect(masterGain);
+
+        osc.start(now);
+        osc.stop(now + 0.3);
+    }
+
+    function playSnare() {
+        if (!audioContext || audioContext.state !== 'running' || !masterGain) return;
+        const now = audioContext.currentTime;
+
+        const bufferSize = audioContext.sampleRate * 0.2;
+        const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+        const output = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            output[i] = (Math.random() * 2 - 1) * 0.5;
+        }
+        const noiseSource = audioContext.createBufferSource();
+        noiseSource.buffer = noiseBuffer;
+
+        const noiseFilter = audioContext.createBiquadFilter();
+        noiseFilter.type = 'bandpass';
+        noiseFilter.frequency.setValueAtTime(1500, now);
+        noiseFilter.Q.setValueAtTime(10, now);
+
+        const noiseGain = audioContext.createGain();
+        noiseGain.gain.setValueAtTime(0.8, now);
+        noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.15);
+
+        noiseSource.connect(noiseFilter);
+        noiseFilter.connect(noiseGain);
+        noiseGain.connect(masterGain);
+
+        const toneOsc = audioContext.createOscillator();
+        toneOsc.type = 'triangle';
+        toneOsc.frequency.setValueAtTime(200, now);
+
+        const toneGain = audioContext.createGain();
+        toneGain.gain.setValueAtTime(0.7, now);
+        toneGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.1);
+
+        toneOsc.connect(toneGain);
+        toneGain.connect(masterGain);
+
+        noiseSource.start(now);
+        toneOsc.start(now);
+        noiseSource.stop(now + 0.2);
+        toneOsc.stop(now + 0.15);
+    }
+
+    function playHiHat() {
+        if (!audioContext || audioContext.state !== 'running' || !masterGain) return;
+        const now = audioContext.currentTime;
+
+        const bufferSize = audioContext.sampleRate * 0.08;
+        const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+        const output = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            output[i] = (Math.random() * 2 - 1) * 0.3;
+        }
+        const noiseSource = audioContext.createBufferSource();
+        noiseSource.buffer = noiseBuffer;
+
+        const hiPassFilter = audioContext.createBiquadFilter();
+        hiPassFilter.type = 'highpass';
+        hiPassFilter.frequency.setValueAtTime(8000, now);
+
+        const gain = audioContext.createGain();
+        gain.gain.setValueAtTime(0.4, now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.06);
+
+        noiseSource.connect(hiPassFilter);
+        hiPassFilter.connect(gain);
+        gain.connect(masterGain);
+
+        noiseSource.start(now);
+        noiseSource.stop(now + 0.1);
     }
 
 
@@ -501,23 +714,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (seqPlayPauseButton) {
                     seqPlayPauseButton.disabled = false;
-                    // console.log('DEBUG_SEQ_PLAY_BTN: Sequencer Play/Pause button explicitly enabled (after resume).');
-                } else {
-                    // console.error('DEBUG_SEQ_PLAY_BTN: seqPlayPauseButton element not found when trying to enable it (after resume).');
                 }
+                setupMetronomeControls(); // Setup metronome controls now
             }).catch(e => console.error("Error resuming AudioContext:", e));
         } else if (audioContext.state === 'running') {
-            // console.log('AudioContext already running.');
             if (filterNode && masterGain) {
                 filterNode.connect(masterGain);
             }
             setupMidi();
             if (seqPlayPauseButton) {
                  seqPlayPauseButton.disabled = false;
-                 // console.log('DEBUG_SEQ_PLAY_BTN: Sequencer Play/Pause button explicitly enabled (already running).');
-            } else {
-                // console.error('DEBUG_SEQ_PLAY_BTN: seqPlayPauseButton element not found when trying to enable it (context already running).');
             }
+            setupMetronomeControls(); // Setup metronome controls now
         } else {
             console.error(`Unexpected AudioContext state: ${audioContext.state}. Sequencer functions might not work.`);
         }
@@ -530,9 +738,108 @@ document.addEventListener('DOMContentLoaded', () => {
     // If AudioContext can start without user gesture (some browsers allow this from localhost)
     // initAudio(); // Commented out to prefer user gesture start
 
+    // --- Metronome Logic ---
+    function playMetronomeClick() {
+        if (!audioContext || audioContext.state !== 'running') {
+            // console.warn('Metronome click suppressed: AudioContext not running.');
+            return;
+        }
+
+        const clickTime = audioContext.currentTime;
+        const osc = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(1200, clickTime);
+        gain.gain.setValueAtTime(0.5, clickTime);
+
+        gain.gain.exponentialRampToValueAtTime(0.0001, clickTime + 0.05);
+
+        osc.connect(gain);
+        if (masterGain) { // Prefer connecting to masterGain if available
+            gain.connect(masterGain);
+        } else {
+            gain.connect(audioContext.destination);
+        }
+
+        osc.start(clickTime);
+        osc.stop(clickTime + 0.05);
+    }
+
+    function setupMetronomeControls() {
+        metronomeToggleButton = document.getElementById('metronome-toggle');
+        if (metronomeToggleButton) {
+            metronomeToggleButton.addEventListener('click', () => {
+                isMetronomeOn = !isMetronomeOn;
+                if (isMetronomeOn) {
+                    metronomeToggleButton.textContent = 'Metronome: On';
+                    metronomeToggleButton.classList.add('active');
+                } else {
+                    metronomeToggleButton.textContent = 'Metronome: Off';
+                    metronomeToggleButton.classList.remove('active');
+                }
+                // console.log(`Metronome is now ${isMetronomeOn ? 'On' : 'Off'}`);
+            });
+            metronomeToggleButton.disabled = false; // Enable the button
+            console.log("Metronome controls setup and enabled.");
+        } else {
+            console.error('Metronome toggle button not found during setup.');
+        }
+    }
+
+
     // --- Sequencer Setup and UI Logic ---
+    function setupDrumMachine() {
+        drumMachineGridElement = document.getElementById('drum-machine-grid');
+        if (drumMachineGridElement) {
+            createDrumMachineGrid();
+            // console.log('Drum machine UI created.'); // Log can be less verbose now
+        } else {
+            console.error('Drum machine grid element not found!');
+        }
+    }
+
+    function createDrumMachineGrid() {
+        if (!drumMachineGridElement) return;
+        drumMachineGridElement.innerHTML = '';
+        drumMachineData = [];
+        drumStepCellElements = []; // Initialize/clear the array for DOM elements
+
+        for (let i = 0; i < NUM_STEPS; i++) {
+            drumMachineData.push(DRUM_STATE_OFF);
+
+            const cell = document.createElement('div');
+            cell.className = 'drum-step-cell ' + drumStateClasses[DRUM_STATE_OFF];
+            cell.dataset.stepId = i;
+            // Optionally, add a visual number or marker inside the cell if desired, e.g.
+            // cell.textContent = (i % 4 === 0) ? '●' : ''; // Mark every 4th beat for readability
+
+            cell.addEventListener('click', (e) => {
+                const stepId = parseInt(e.currentTarget.dataset.stepId, 10); // Added radix
+                if (isNaN(stepId) || stepId < 0 || stepId >= NUM_STEPS) {
+                    console.error('Invalid stepId on drum cell:', e.currentTarget.dataset.stepId);
+                    return;
+                }
+
+                const previousState = drumMachineData[stepId];
+                drumMachineData[stepId] = (drumMachineData[stepId] + 1) % NUM_DRUM_STATES;
+                const newState = drumMachineData[stepId];
+
+                // Update CSS classes
+                if (drumStateClasses[previousState]) { // Check if previous state had a class
+                    e.currentTarget.classList.remove(drumStateClasses[previousState]);
+                }
+                e.currentTarget.classList.add(drumStateClasses[newState]);
+
+                console.log(`Drum step ${stepId} state: ${newState} (was ${previousState})`);
+            });
+
+            drumMachineGridElement.appendChild(cell);
+            drumStepCellElements.push(cell); // Store reference to the cell
+        }
+    }
+
     function setupSequencer() {
-        // console.log('DEBUG_INIT: setupSequencer() called.');
         // Get DOM Elements
         seqPlayPauseButton = document.getElementById('seq-play-pause-button');
         seqTempoSlider = document.getElementById('seq-tempo');
@@ -636,48 +943,66 @@ document.addEventListener('DOMContentLoaded', () => {
     function playStep() {
         if (!isPlaying || !audioContext) return; // Stop if sequencer is paused or audio context lost
 
-        // Remove highlight from the previous step
-        // Note: currentStep is the one about to be played. So previous is currentStep-1.
-        // If currentStep is 0, previous is NUM_STEPS - 1.
-        const prevStepVisualIndex = (currentStep - 1 + NUM_STEPS) % NUM_STEPS;
-        const prevStepElement = sequencerGrid.querySelector(`.sequencer-step[data-step-id="${prevStepVisualIndex}"]`);
-        if (prevStepElement) {
-            prevStepElement.classList.remove('active-step');
+        // Remove highlight from the previous melodic step
+        const prevVisualIndex = (currentStep - 1 + NUM_STEPS) % NUM_STEPS; // Used for both sequencers
+
+        const prevMelodicStepElement = sequencerGrid.querySelector(`.sequencer-step[data-step-id="${prevVisualIndex}"]`);
+        if (prevMelodicStepElement) {
+            prevMelodicStepElement.classList.remove('active-step');
+        }
+        // Remove highlight from previous drum step
+        if (drumStepCellElements[prevVisualIndex]) {
+            drumStepCellElements[prevVisualIndex].classList.remove('active-step');
         }
 
-        // Get data for the current step
-        const stepData = sequencerData[currentStep];
+        // Metronome Click Logic
+        if (isMetronomeOn && (currentStep % STEPS_PER_BEAT === 0)) {
+            playMetronomeClick();
+        }
 
-        // console.log(`DEBUG: playStep - Step: ${currentStep}, noteOn: ${stepData ? stepData.noteOn : 'N/A'}, pitch: ${stepData ? stepData.pitch : 'N/A'}`);
-
-        // Play note if 'noteOn' is true for the current step
-        if (stepData && stepData.noteOn) {
-            const midiNote = stepData.pitch;
+        // Melodic Sequencer Logic
+        const melodicStepData = sequencerData[currentStep]; // Assuming sequencerData is for melodic steps
+        if (melodicStepData && melodicStepData.noteOn) {
+            const midiNote = melodicStepData.pitch;
             const frequency = midiToFrequency(midiNote);
-
-            // console.log(`DEBUG: playStep - Playing note. Freq: ${frequency}, MIDI: ${midiNote}`);
-            playNote(frequency, midiNote);
+            playNote(frequency, midiNote); // Main synth's playNote
 
             const beatsPerSecond = currentTempo / 60;
             const stepIntervalMilliseconds = (1 / (beatsPerSecond * STEPS_PER_BEAT)) * 1000;
             const noteDurationMilliseconds = stepIntervalMilliseconds * 0.8;
-
-            // console.log(`DEBUG: playStep - Note duration: ${noteDurationMilliseconds}`);
-
-            if (noteDurationMilliseconds <= 0) {
-                // console.warn(`DEBUG: playStep - Calculated note duration is zero or negative (${noteDurationMilliseconds}ms). Note may not play or stop immediately.`);
-            }
 
             setTimeout(() => {
                 stopNote(midiNote);
             }, Math.max(1, noteDurationMilliseconds));
         }
 
-        // Highlight current step and update display
-        const currentStepElement = sequencerGrid.querySelector(`.sequencer-step[data-step-id="${currentStep}"]`);
-        if (currentStepElement) {
-            currentStepElement.classList.add('active-step');
+        // Drum Machine Logic
+        if (drumMachineData && drumMachineData.length > currentStep) {
+            const drumState = drumMachineData[currentStep];
+            switch (drumState) {
+                case DRUM_STATE_BD:
+                    playBassDrum();
+                    break;
+                case DRUM_STATE_HH:
+                    playHiHat();
+                    break;
+                case DRUM_STATE_SN:
+                    playSnare();
+                    break;
+                // No action for DRUM_STATE_OFF (0)
+            }
         }
+
+        // Highlight current melodic step & update display
+        const currentMelodicStepElement = sequencerGrid.querySelector(`.sequencer-step[data-step-id="${currentStep}"]`);
+        if (currentMelodicStepElement) {
+            currentMelodicStepElement.classList.add('active-step');
+        }
+        // Highlight current drum step
+        if (drumStepCellElements[currentStep]) {
+            drumStepCellElements[currentStep].classList.add('active-step');
+        }
+
         if(seqCurrentStepDisplay) seqCurrentStepDisplay.textContent = currentStep + 1;
 
         // Advance to the next step

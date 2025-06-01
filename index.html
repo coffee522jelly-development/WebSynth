@@ -76,6 +76,7 @@
             <label for="seq-tempo">Tempo:</label>
             <input type="range" id="seq-tempo" name="seq-tempo" min="40" max="240" value="120">
             <span id="seq-tempo-value">120 BPM</span>
+            <button id="metronome-toggle">Metronome: Off</button>
             <label for="seq-current-step">Current Step:</label>
             <span id="seq-current-step-display">-</span>
             <!-- Add more controls here later e.g. clear sequence, swing, etc. -->
@@ -92,6 +93,14 @@
                 <label for="step-pitch-0" class="sr-only">Step 1 Pitch</label>
             </div>
             -->
+        </div>
+    </div>
+
+    <div id="drum-machine-panel">
+        <h2>Drum Machine</h2>
+        <div id="drum-machine-grid">
+            <!-- Drum machine steps (e.g., 3 rows for Kick, Snare, Hi-Hat, 32 steps each) -->
+            <!-- will be dynamically generated here by JavaScript -->
         </div>
     </div>
 
