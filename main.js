@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Sequencer Specific Variables ---
     const NUM_STEPS = 32;
-    let sequencerData = [];
+    let sequencerData = []; // Initialize here, will be populated in setupSequencer
     let currentTempo = 120; // Default tempo
     let isPlaying = false; // Sequencer play state
     let currentStep = 0; // Tracks the current playing step (0 to NUM_STEPS - 1)
@@ -377,12 +377,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Note Play Logic (Polyphonic with Envelope and Filter) ---
     function playNote(frequency, midiNote) { // Added midiNote parameter
-        if (!audioContext || !filterNode) {
-            console.warn("AudioContext or filterNode not initialized. Cannot play note.");
-            return;
+        // Check if AudioContext is running. If not, notes cannot be played.
+        if (!audioContext || audioContext.state !== 'running') {
+            // console.warn(`playNote: AudioContext not running. State: ${audioContext ? audioContext.state : 'uninitialized'}`);
+            return; // Do not proceed if context is not running
         }
-        if (audioContext.state === 'suspended') {
-            audioContext.resume().then(() => console.log("AudioContext resumed by playNote"));
+
+        if (!filterNode) {
+            console.warn("FilterNode not initialized. Cannot play note.");
+            return;
         }
 
         // If note is already playing, stop it first (re-trigger)
@@ -524,9 +527,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Initialize Data
+        sequencerData = []; // Explicitly clear/reset before populating
         for (let i = 0; i < NUM_STEPS; i++) {
             sequencerData.push({ noteOn: false, pitch: 60 }); // Default pitch C4 (MIDI 60)
         }
+        // console.log("DEBUG: sequencerData initialized:", JSON.parse(JSON.stringify(sequencerData.slice(0,3)))); // Log sample
 
         // Create Grid UI
         createSequencerGrid();
@@ -570,17 +575,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     function startSequencerPlayback() {
-        if (timerID) { // Clear any existing timer before starting a new one
+        if (timerID) {
             clearInterval(timerID);
         }
         const beatsPerSecond = currentTempo / 60;
         const intervalMilliseconds = (1 / (beatsPerSecond * STEPS_PER_BEAT)) * 1000;
+        // console.log(`DEBUG: startSequencerPlayback - Tempo: ${currentTempo}, Interval: ${intervalMilliseconds}ms`);
 
-        // Call playStep immediately to play the first beat (currentStep) without delay
-        if(isPlaying) playStep();
+        if (isPlaying && audioContext && audioContext.state === 'running') { // Ensure context is running before first playStep
+            playStep();
+        }
 
         timerID = setInterval(playStep, intervalMilliseconds);
-        console.log(`Sequencer playback started. Interval: ${intervalMilliseconds}ms`);
     }
 
     function stopSequencerPlayback() {
@@ -610,32 +616,29 @@ document.addEventListener('DOMContentLoaded', () => {
         // Get data for the current step
         const stepData = sequencerData[currentStep];
 
+        // console.log(`DEBUG: playStep - Step: ${currentStep}, noteOn: ${stepData ? stepData.noteOn : 'N/A'}, pitch: ${stepData ? stepData.pitch : 'N/A'}`);
+
         // Play note if 'noteOn' is true for the current step
-        if (stepData.noteOn) {
+        if (stepData && stepData.noteOn) {
             const midiNote = stepData.pitch;
             const frequency = midiToFrequency(midiNote);
 
-            // Use main synth's playNote
-            playNote(frequency, midiNote); // playNote already handles polyphony via activeNotesMap
+            // console.log(`DEBUG: playStep - Playing note. Freq: ${frequency}, MIDI: ${midiNote}`);
+            playNote(frequency, midiNote);
 
-            // Calculate note duration (e.g., 80% of a step's interval)
             const beatsPerSecond = currentTempo / 60;
             const stepIntervalMilliseconds = (1 / (beatsPerSecond * STEPS_PER_BEAT)) * 1000;
-            const noteDurationMilliseconds = stepIntervalMilliseconds * 0.8; // Play for 80% of the step duration
+            const noteDurationMilliseconds = stepIntervalMilliseconds * 0.8;
 
-            // Schedule stopNote for this specific note from the sequencer
-            // This uses a unique identifier (e.g., 'seq_' + midiNote + '_' + currentStep) if we needed to avoid collision with keyboard playing
-            // But since playNote/stopNote use midiNote as key, we should be fine.
-            // However, a long release from keyboard could be cut by sequencer note, or vice-versa if not careful.
-            // For now, direct stopNote is okay.
+            // console.log(`DEBUG: playStep - Note duration: ${noteDurationMilliseconds}`);
+
+            if (noteDurationMilliseconds <= 0) {
+                // console.warn(`DEBUG: playStep - Calculated note duration is zero or negative (${noteDurationMilliseconds}ms). Note may not play or stop immediately.`);
+            }
+
             setTimeout(() => {
-                // We only want to stop the note played by this step, not a potentially overlapping keyboard note.
-                // The activeNotesMap in playNote/stopNote handles this by MIDI note number.
-                // If a new note (even same MIDI number) is played by keyboard while seq note is on,
-                // playNote's retrigger logic handles the old one.
-                // If seq plays same MIDI note again, playNote retrigger logic handles it.
                 stopNote(midiNote);
-            }, noteDurationMilliseconds);
+            }, Math.max(1, noteDurationMilliseconds));
         }
 
         // Highlight current step and update display
@@ -672,8 +675,11 @@ document.addEventListener('DOMContentLoaded', () => {
             noteOnCheckbox.title = `Step ${i + 1} On/Off`;
             noteOnCheckbox.checked = sequencerData[i].noteOn; // Reflect data
             noteOnCheckbox.addEventListener('change', (e) => {
-                sequencerData[i].noteOn = e.target.checked;
-                console.log(`Step ${i} noteOn: ${sequencerData[i].noteOn}`);
+                const stepIndex = i;
+                sequencerData[stepIndex].noteOn = e.target.checked;
+                // console.log(`DEBUG_CLICK: Checkbox for Step ${stepIndex} changed. Checked: ${e.target.checked}. sequencerData[${stepIndex}].noteOn is now: ${sequencerData[stepIndex].noteOn}. Full sequencerData[${stepIndex}]: ${JSON.stringify(sequencerData[stepIndex])}`);
+                // Retaining general log as it's useful for confirming interaction:
+                console.log(`Step ${stepIndex} noteOn state: ${sequencerData[stepIndex].noteOn}`);
             });
             stepDiv.appendChild(noteOnCheckbox);
 
