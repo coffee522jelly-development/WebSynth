@@ -13,8 +13,8 @@ body {
 }
 
 h1#app-title {
-    color: #00d8ff;
-    text-shadow: 0 0 5px #00d8ff, 0 0 10px #00d8ff;
+    color: #FFA500; /* Orange */
+    text-shadow: 0 0 5px #FFA500, 0 0 10px #FFA500;
     margin-bottom: 20px;
 }
 
@@ -43,8 +43,8 @@ h1#app-title {
 #control-panel h2 {
     margin-top: 0;
     font-size: 1.3em;
-    color: #00d8ff; /* Accent color for headings */
-    border-bottom: 1px solid #00aaff;
+    color: #FFA500; /* Orange */
+    border-bottom: 1px solid #CC8400; /* Darker Orange */
     padding-bottom: 5px;
     margin-bottom: 15px;
 }
@@ -73,7 +73,7 @@ h1#app-title {
     appearance: none;
     width: 18px;
     height: 18px;
-    background: #00d8ff;
+    background: #FFA500; /* Orange */
     border-radius: 50%;
     cursor: pointer;
     border: 2px solid #222;
@@ -82,7 +82,7 @@ h1#app-title {
 #control-panel input[type="range"]::-moz-range-thumb {
     width: 16px;
     height: 16px;
-    background: #00d8ff;
+    background: #FFA500; /* Orange */
     border-radius: 50%;
     cursor: pointer;
     border: 2px solid #222;
@@ -107,6 +107,13 @@ h1#app-title {
 #oscillator input[type="radio"] {
     margin-right: 5px;
     vertical-align: middle;
+}
+
+#waveform-canvas {
+    border: 1px solid #CC8400; /* Darker Orange for border */
+    background-color: #3a3a3a; /* Dark background for the canvas */
+    /* margin-top is already set inline in HTML, but can be centralized here if preferred */
+    border-radius: 4px;
 }
 
 
@@ -191,12 +198,13 @@ h1#app-title {
 
 
 .key.active {
-    background-color: #00d8ff; /* Active color for all keys */
-    box-shadow: inset 0 0 5px #007bff, 0 0 3px #00d8ff;
-    color: #fff; /* Ensure text is visible on active black keys */
+    background-color: #FFA500; /* Orange */
+    box-shadow: inset 0 0 5px #CC8400, 0 0 3px #FFA500; /* Darker Orange shadow */
+    color: #fff; /* White text on active orange keys for contrast */
 }
 .black-key.active {
-    background: #00aaff; /* Slightly different active for black keys if desired */
+    background: #FF8C00; /* DarkOrange for active black keys, or keep same as white */
+    color: #fff;
 }
 
 /* Start Button */
@@ -204,7 +212,7 @@ h1#app-title {
     padding: 12px 25px;
     font-size: 1.2em;
     color: white;
-    background-color: #007bff;
+    background-color: #FFA500; /* Orange */
     border: none;
     border-radius: 5px;
     cursor: pointer;
@@ -212,7 +220,7 @@ h1#app-title {
     margin-bottom: 20px; /* Space it out if it's visible initially */
 }
 #start-synth-button:hover {
-    background-color: #0056b3;
+    background-color: #FFC14D; /* Lighter Orange */
 }
 
 /* Ensure this button styling applies to the dynamically created start button if it doesn't have an ID */
@@ -221,7 +229,7 @@ body > button { /* This is a bit broad, but targets the button added to body */
     padding: 12px 25px;
     font-size: 1.2em;
     color: white;
-    background-color: #00d8ff;
+    background-color: #FFA500; /* Orange */
     border: none;
     border-radius: 8px;
     cursor: pointer;
@@ -231,7 +239,7 @@ body > button { /* This is a bit broad, but targets the button added to body */
     margin-bottom: 20px; /* Space it out */
 }
 body > button:hover {
-    background-color: #00aaff;
+    background-color: #FFC14D; /* Lighter Orange */
     box-shadow: 0 6px 12px rgba(0,0,0,0.4);
 }
 

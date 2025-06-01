@@ -11,6 +11,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let lfoGain;
     let currentLfoTarget = '';
 
+    let waveformCanvas, waveformCtx; // For waveform display
+
     // --- Initialize Audio Context and Master Gain ---
     function initAudio() {
         try {
@@ -46,24 +48,111 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Oscillator ---
     function setupOscillator() {
         const waveformRadios = document.querySelectorAll('input[name="waveform"]');
-        let currentWaveform = 'sine'; // Default
+        let currentGlobalWaveform = 'sine'; // Default for new notes and UI
+
+        waveformCanvas = document.getElementById('waveform-canvas');
+        if (waveformCanvas) {
+            waveformCtx = waveformCanvas.getContext('2d');
+        } else {
+            console.error("Waveform canvas not found!");
+        }
 
         waveformRadios.forEach(radio => {
             if (radio.checked) {
-                currentWaveform = radio.value;
+                currentGlobalWaveform = radio.value;
             }
             radio.addEventListener('change', (e) => {
-                currentWaveform = e.target.value;
-                console.log('Waveform changed to:', currentWaveform);
-                // If an oscillator is active, update its type (applies if note is held and waveform changed)
-                // This needs to iterate over activeNotesMap if we want to change type for all playing notes.
-                // For now, new notes will get the new waveform. Existing notes won't change.
-                // A more advanced implementation might update them.
+                currentGlobalWaveform = e.target.value;
+                console.log('Global waveform changed to:', currentGlobalWaveform);
+                if (waveformCtx && waveformCanvas) {
+                    drawWaveform(waveformCtx, currentGlobalWaveform, waveformCanvas.width, waveformCanvas.height);
+                }
+                // Note: This does not change waveform for already playing notes.
+                // window.getCurrentWaveform() will provide this new global type for new notes.
             });
         });
+
         // Store the function to get current waveform for later use
-        window.getCurrentWaveform = () => currentWaveform;
-        console.log('Oscillator UI setup complete.');
+        window.getCurrentWaveform = () => currentGlobalWaveform;
+
+        // Initial draw
+        if (waveformCtx && waveformCanvas) {
+            drawWaveform(waveformCtx, currentGlobalWaveform, waveformCanvas.width, waveformCanvas.height);
+        }
+        console.log('Oscillator UI setup complete. Initial waveform:', currentGlobalWaveform);
+    }
+
+
+    function drawWaveform(ctx, waveformType, width, height) {
+        if (!ctx) return;
+
+        ctx.clearRect(0, 0, width, height);
+        ctx.strokeStyle = '#FFA500'; // Orange theme color
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+
+        const amplitude = height / 2 * 0.8; // 80% of half height
+        const centerY = height / 2;
+        const cycles = 2; // Number of full waveform cycles to display
+        const period = width / cycles;
+
+        switch (waveformType) {
+            case 'sine':
+                ctx.moveTo(0, centerY);
+                for (let x = 0; x <= width; x++) {
+                    // (x / period) gives current position within a cycle (0 to cycles)
+                    // Multiply by 2*PI for radians
+                    const angle = (x / period) * (Math.PI * 2);
+                    const y = centerY - amplitude * Math.sin(angle);
+                    ctx.lineTo(x, y);
+                }
+                break;
+            case 'square':
+                for (let c = 0; c < cycles; c++) {
+                    const startX = c * period;
+                    ctx.moveTo(startX, centerY - amplitude);
+                    ctx.lineTo(startX + period / 2, centerY - amplitude);
+                    ctx.lineTo(startX + period / 2, centerY + amplitude);
+                    ctx.lineTo(startX + period, centerY + amplitude);
+                    // Draw vertical line back up for next cycle if not the last point
+                    if (c < cycles -1 || startX + period < width -1) { // Check to avoid drawing past width
+                         ctx.lineTo(startX + period, centerY - amplitude);
+                    }
+                }
+                 // Ensure the line reaches the end if it's slightly off due to rounding
+                if (width % period !== 0 && cycles * period < width) {
+                    const lastX = cycles * period;
+                    const lastY = ctx.currentPoint ? ctx.currentPoint.y : (waveformType === 'square' ? centerY + amplitude : centerY); // Get last Y
+                    ctx.lineTo(width, lastY);
+                }
+                break;
+            case 'sawtooth': // Rising sawtooth
+                for (let c = 0; c < cycles; c++) {
+                    const startX = c * period;
+                    ctx.moveTo(startX, centerY + amplitude); // Start at bottom
+                    ctx.lineTo(startX + period, centerY - amplitude); // Go to top
+                     // Draw vertical line back down for next cycle if not the last point and not past width
+                    if (c < cycles - 1 && (startX + period) < width -1 ) {
+                         ctx.lineTo(startX + period, centerY + amplitude);
+                    }
+                }
+                 if (width % period !== 0 && cycles * period < width) { // Ensure line reaches end
+                    ctx.lineTo(width, centerY-amplitude); // complete the last ramp
+                }
+                break;
+            case 'triangle':
+                for (let c = 0; c < cycles; c++) {
+                    const startX = c * period;
+                    ctx.moveTo(startX, centerY);
+                    ctx.lineTo(startX + period / 4, centerY - amplitude); // Up to peak
+                    ctx.lineTo(startX + (period * 3) / 4, centerY + amplitude); // Down to trough
+                    ctx.lineTo(startX + period, centerY); // Back to center
+                }
+                break;
+            default:
+                console.warn("Unknown waveform type for drawing:", waveformType);
+        }
+        ctx.stroke();
     }
 
     // --- Envelope (ADSR) ---
