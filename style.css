@@ -247,3 +247,182 @@ body > button:hover {
 #keyboard-panel {
     overflow-x: auto; /* Add scroll if keys exceed panel width */
 }
+
+/* Screen-reader only utility class */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+}
+
+
+/* Sequencer Panel Styling */
+#sequencer-panel {
+    background-color: #444; /* Consistent with control-panel */
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    margin-top: 30px; /* Space below keyboard */
+    width: 95%;
+    max-width: 1000px; /* Match keyboard max-width for alignment */
+    color: #fff;
+}
+
+#sequencer-panel h2 {
+    margin-top: 0;
+    font-size: 1.3em;
+    color: #FFA500; /* Orange theme */
+    border-bottom: 1px solid #CC8400; /* Darker Orange */
+    padding-bottom: 5px;
+    margin-bottom: 15px;
+}
+
+#sequencer-controls {
+    display: flex;
+    flex-wrap: wrap; /* Allow wrapping on smaller screens */
+    align-items: center;
+    gap: 15px; /* Space between controls */
+    margin-bottom: 20px;
+    padding: 10px;
+    background-color: #555;
+    border-radius: 6px;
+}
+
+#sequencer-controls label {
+    margin-right: 5px;
+    font-size: 0.9em;
+    color: #ddd;
+}
+
+#seq-play-pause-button {
+    padding: 8px 15px;
+    font-size: 1em;
+    color: white;
+    background-color: #FFA500; /* Orange theme */
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+#seq-play-pause-button:hover {
+    background-color: #FFC14D; /* Lighter Orange */
+}
+#seq-play-pause-button.playing {
+    background-color: #FF8C00; /* Darker orange when playing */
+}
+
+
+#seq-tempo {
+    width: 150px; /* Adjust as needed */
+    /* Uses existing range slider styles from #control-panel input[type="range"] */
+}
+#seq-tempo-value, #seq-current-step-display {
+    background-color: #333;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-family: 'Courier New', Courier, monospace;
+    color: #FFA500;
+    min-width: 30px; /* Ensure display doesn't jump around too much */
+    text-align: center;
+}
+
+/* Sequencer Grid Styling */
+#sequencer-grid {
+    display: grid;
+    grid-template-columns: repeat(16, 1fr); /* 16 steps per row */
+    gap: 5px; /* Small gap between steps */
+    background-color: #3a3a3a; /* Background for the grid area */
+    padding: 10px;
+    border-radius: 6px;
+    overflow-x: auto; /* Allow horizontal scroll if many steps don't fit */
+    min-height: 120px; /* Based on two rows of steps */
+}
+
+.sequencer-step {
+    display: flex;
+    flex-direction: column; /* Stack label, checkbox, input vertically */
+    align-items: center; /* Center items horizontally */
+    justify-content: space-between; /* Distribute space */
+    background-color: #505050;
+    border: 1px solid #666;
+    border-radius: 4px;
+    padding: 5px;
+    min-width: 50px; /* Minimum width for each step */
+    height: 50px; /* Fixed height for each step */
+    box-sizing: border-box;
+    transition: background-color 0.1s ease, border-color 0.1s ease;
+}
+
+.sequencer-step.active-step {
+    background-color: #6a6a6a; /* Slightly lighter for active step background */
+    border-left: 3px solid #FFA500; /* Orange highlight for current playing step */
+    border-right: 1px solid #FFA500;
+    border-top: 1px solid #FFA500;
+    border-bottom: 1px solid #FFA500;
+}
+
+.step-label {
+    font-size: 0.7em;
+    color: #ccc;
+    margin-bottom: 4px; /* Space between label and checkbox */
+    user-select: none;
+}
+
+.seq-note-on { /* Checkbox styling */
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    width: 18px;
+    height: 18px;
+    background-color: #444;
+    border: 1px solid #777;
+    border-radius: 3px;
+    cursor: pointer;
+    position: relative; /* For custom checkmark */
+    outline: none;
+    transition: background-color 0.1s ease, border-color 0.1s ease;
+}
+
+.seq-note-on:checked {
+    background-color: #FFA500; /* Orange when checked */
+    border-color: #CC8400;
+}
+
+.seq-note-on:checked::before { /* Custom checkmark */
+    content: '✔';
+    font-size: 12px;
+    color: white;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    line-height: 1; /* Ensure checkmark is centered */
+}
+
+
+.seq-pitch { /* Number input styling */
+    width: 100%; /* Full width of step, minus padding */
+    max-width: 40px; /* Max width for the number input */
+    padding: 2px;
+    font-size: 0.75em;
+    text-align: center;
+    background-color: #333;
+    color: #fff;
+    border: 1px solid #666;
+    border-radius: 3px;
+    -moz-appearance: textfield; /* Hide spinners in Firefox */
+    margin-top: 4px;
+}
+
+.seq-pitch::-webkit-inner-spin-button,
+.seq-pitch::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0; /* Hide spinners in Chrome/Safari/Edge */
+}

@@ -13,6 +13,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let waveformCanvas, waveformCtx; // For waveform display
 
+    // --- Sequencer Specific Variables ---
+    const NUM_STEPS = 32;
+    let sequencerData = [];
+    let currentTempo = 120; // Default tempo
+    let isPlaying = false; // Sequencer play state
+    let currentStep = 0; // Tracks the current playing step (0 to NUM_STEPS - 1)
+    let timerID;       // Stores the ID from setInterval for sequencer playback
+    const STEPS_PER_BEAT = 4; // Assuming 16th notes in the sequencer
+
+    // DOM Elements for Sequencer
+    let seqPlayPauseButton, seqTempoSlider, seqTempoValueDisplay, seqCurrentStepDisplay, sequencerGrid;
+
+
     // --- Initialize Audio Context and Master Gain ---
     function initAudio() {
         try {
@@ -41,6 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setupFilter();
         setupLFO();
         setupKeyboard();
+        setupSequencer(); // Initialize sequencer UI and data
 
         console.log('Synthesizer setup complete.');
     }
@@ -494,6 +508,225 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // If AudioContext can start without user gesture (some browsers allow this from localhost)
     // initAudio(); // Commented out to prefer user gesture start
+
+    // --- Sequencer Setup and UI Logic ---
+    function setupSequencer() {
+        // Get DOM Elements
+        seqPlayPauseButton = document.getElementById('seq-play-pause-button');
+        seqTempoSlider = document.getElementById('seq-tempo');
+        seqTempoValueDisplay = document.getElementById('seq-tempo-value');
+        seqCurrentStepDisplay = document.getElementById('seq-current-step-display');
+        sequencerGrid = document.getElementById('sequencer-grid');
+
+        if (!sequencerGrid || !seqPlayPauseButton || !seqTempoSlider || !seqTempoValueDisplay || !seqCurrentStepDisplay) {
+            console.error("One or more sequencer DOM elements not found. Sequencer setup aborted.");
+            return;
+        }
+
+        // Initialize Data
+        for (let i = 0; i < NUM_STEPS; i++) {
+            sequencerData.push({ noteOn: false, pitch: 60 }); // Default pitch C4 (MIDI 60)
+        }
+
+        // Create Grid UI
+        createSequencerGrid();
+
+        // Setup Event Listeners
+        seqPlayPauseButton.addEventListener('click', () => {
+            isPlaying = !isPlaying;
+            if (isPlaying) {
+                seqPlayPauseButton.textContent = 'Pause';
+                seqPlayPauseButton.classList.add('playing');
+                currentStep = 0; // Reset to start when playing from a stopped state. Consider if resuming is needed.
+                startSequencerPlayback();
+            } else {
+                seqPlayPauseButton.textContent = 'Play';
+                seqPlayPauseButton.classList.remove('playing');
+                stopSequencerPlayback();
+            }
+        });
+
+        currentTempo = parseInt(seqTempoSlider.value);
+        seqTempoValueDisplay.textContent = `${currentTempo} BPM`;
+        seqTempoSlider.addEventListener('input', (e) => {
+            currentTempo = parseInt(e.target.value);
+            seqTempoValueDisplay.textContent = `${currentTempo} BPM`;
+            if (isPlaying) {
+                // stopSequencerPlayback(); // Clear existing timer
+                // startSequencerPlayback(); // Restart with new tempo - this will also reset currentStep if not handled carefully
+                // More refined approach: just update interval of existing timer if possible, or clear and restart carefully
+                clearInterval(timerID); // Clear existing timer
+                const beatsPerSecond = currentTempo / 60;
+                const intervalMilliseconds = (1 / (beatsPerSecond * STEPS_PER_BEAT)) * 1000;
+                timerID = setInterval(playStep, intervalMilliseconds); // Restart with new tempo
+                console.log("Tempo changed while playing, new interval:", intervalMilliseconds);
+            } else {
+                console.log("Tempo changed to:", currentTempo);
+            }
+        });
+
+        console.log("Sequencer UI and data initialized.");
+    }
+
+
+    function startSequencerPlayback() {
+        if (timerID) { // Clear any existing timer before starting a new one
+            clearInterval(timerID);
+        }
+        const beatsPerSecond = currentTempo / 60;
+        const intervalMilliseconds = (1 / (beatsPerSecond * STEPS_PER_BEAT)) * 1000;
+
+        // Call playStep immediately to play the first beat (currentStep) without delay
+        if(isPlaying) playStep();
+
+        timerID = setInterval(playStep, intervalMilliseconds);
+        console.log(`Sequencer playback started. Interval: ${intervalMilliseconds}ms`);
+    }
+
+    function stopSequencerPlayback() {
+        clearInterval(timerID);
+        timerID = null; // Important to nullify to allow restart
+        // isPlaying = false; // This should be handled by the play/pause button logic primarily
+
+        const allStepElements = document.querySelectorAll('.sequencer-step');
+        allStepElements.forEach(el => el.classList.remove('active-step'));
+
+        if(seqCurrentStepDisplay) seqCurrentStepDisplay.textContent = '-';
+        console.log("Sequencer playback stopped.");
+    }
+
+    function playStep() {
+        if (!isPlaying || !audioContext) return; // Stop if sequencer is paused or audio context lost
+
+        // Remove highlight from the previous step
+        // Note: currentStep is the one about to be played. So previous is currentStep-1.
+        // If currentStep is 0, previous is NUM_STEPS - 1.
+        const prevStepVisualIndex = (currentStep - 1 + NUM_STEPS) % NUM_STEPS;
+        const prevStepElement = sequencerGrid.querySelector(`.sequencer-step[data-step-id="${prevStepVisualIndex}"]`);
+        if (prevStepElement) {
+            prevStepElement.classList.remove('active-step');
+        }
+
+        // Get data for the current step
+        const stepData = sequencerData[currentStep];
+
+        // Play note if 'noteOn' is true for the current step
+        if (stepData.noteOn) {
+            const midiNote = stepData.pitch;
+            const frequency = midiToFrequency(midiNote);
+
+            // Use main synth's playNote
+            playNote(frequency, midiNote); // playNote already handles polyphony via activeNotesMap
+
+            // Calculate note duration (e.g., 80% of a step's interval)
+            const beatsPerSecond = currentTempo / 60;
+            const stepIntervalMilliseconds = (1 / (beatsPerSecond * STEPS_PER_BEAT)) * 1000;
+            const noteDurationMilliseconds = stepIntervalMilliseconds * 0.8; // Play for 80% of the step duration
+
+            // Schedule stopNote for this specific note from the sequencer
+            // This uses a unique identifier (e.g., 'seq_' + midiNote + '_' + currentStep) if we needed to avoid collision with keyboard playing
+            // But since playNote/stopNote use midiNote as key, we should be fine.
+            // However, a long release from keyboard could be cut by sequencer note, or vice-versa if not careful.
+            // For now, direct stopNote is okay.
+            setTimeout(() => {
+                // We only want to stop the note played by this step, not a potentially overlapping keyboard note.
+                // The activeNotesMap in playNote/stopNote handles this by MIDI note number.
+                // If a new note (even same MIDI number) is played by keyboard while seq note is on,
+                // playNote's retrigger logic handles the old one.
+                // If seq plays same MIDI note again, playNote retrigger logic handles it.
+                stopNote(midiNote);
+            }, noteDurationMilliseconds);
+        }
+
+        // Highlight current step and update display
+        const currentStepElement = sequencerGrid.querySelector(`.sequencer-step[data-step-id="${currentStep}"]`);
+        if (currentStepElement) {
+            currentStepElement.classList.add('active-step');
+        }
+        if(seqCurrentStepDisplay) seqCurrentStepDisplay.textContent = currentStep + 1;
+
+        // Advance to the next step
+        currentStep = (currentStep + 1) % NUM_STEPS;
+    }
+
+
+    function createSequencerGrid() {
+        if (!sequencerGrid) return;
+        sequencerGrid.innerHTML = ''; // Clear any placeholders
+
+        for (let i = 0; i < NUM_STEPS; i++) {
+            const stepDiv = document.createElement('div');
+            stepDiv.classList.add('sequencer-step');
+            stepDiv.dataset.stepId = i;
+
+            const label = document.createElement('label');
+            label.classList.add('step-label');
+            label.textContent = i + 1;
+            stepDiv.appendChild(label);
+
+            const noteOnCheckbox = document.createElement('input');
+            noteOnCheckbox.type = 'checkbox';
+            noteOnCheckbox.classList.add('seq-note-on');
+            noteOnCheckbox.id = `step-note-on-${i}`;
+            noteOnCheckbox.name = `step-note-on-${i}`;
+            noteOnCheckbox.title = `Step ${i + 1} On/Off`;
+            noteOnCheckbox.checked = sequencerData[i].noteOn; // Reflect data
+            noteOnCheckbox.addEventListener('change', (e) => {
+                sequencerData[i].noteOn = e.target.checked;
+                console.log(`Step ${i} noteOn: ${sequencerData[i].noteOn}`);
+            });
+            stepDiv.appendChild(noteOnCheckbox);
+
+            // Hidden label for checkbox (accessibility)
+            const srLabelCheckbox = document.createElement('label');
+            srLabelCheckbox.htmlFor = `step-note-on-${i}`;
+            srLabelCheckbox.classList.add('sr-only');
+            srLabelCheckbox.textContent = `Step ${i + 1} Note On/Off`;
+            stepDiv.appendChild(srLabelCheckbox);
+
+
+            const pitchInput = document.createElement('input');
+            pitchInput.type = 'number';
+            pitchInput.classList.add('seq-pitch');
+            pitchInput.id = `step-pitch-${i}`;
+            pitchInput.name = `step-pitch-${i}`;
+            pitchInput.min = "24"; // C1
+            pitchInput.max = "96"; // C7
+            pitchInput.value = sequencerData[i].pitch; // Reflect data
+            pitchInput.title = `Step ${i + 1} Pitch (MIDI)`;
+            pitchInput.addEventListener('input', (e) => { // 'input' for immediate feedback, 'change' for after blur
+                let pitchValue = parseInt(e.target.value);
+                if (isNaN(pitchValue)) pitchValue = 60; // Default if invalid
+                if (pitchValue < parseInt(pitchInput.min)) pitchValue = parseInt(pitchInput.min);
+                if (pitchValue > parseInt(pitchInput.max)) pitchValue = parseInt(pitchInput.max);
+                e.target.value = pitchValue; // Correct the input field if out of bounds
+                sequencerData[i].pitch = pitchValue;
+                console.log(`Step ${i} pitch: ${sequencerData[i].pitch}`);
+            });
+            // Ensure value is within bounds on blur too
+             pitchInput.addEventListener('change', (e) => {
+                let pitchValue = parseInt(e.target.value);
+                 if (isNaN(pitchValue)) pitchValue = 60;
+                if (pitchValue < parseInt(pitchInput.min)) pitchValue = parseInt(pitchInput.min);
+                if (pitchValue > parseInt(pitchInput.max)) pitchValue = parseInt(pitchInput.max);
+                e.target.value = pitchValue;
+                if (sequencerData[i].pitch !== pitchValue) { // Avoid redundant logging if 'input' event already handled it
+                    sequencerData[i].pitch = pitchValue;
+                    console.log(`Step ${i} pitch (on change): ${sequencerData[i].pitch}`);
+                }
+            });
+            stepDiv.appendChild(pitchInput);
+
+            // Hidden label for pitch input (accessibility)
+            const srLabelPitch = document.createElement('label');
+            srLabelPitch.htmlFor = `step-pitch-${i}`;
+            srLabelPitch.classList.add('sr-only');
+            srLabelPitch.textContent = `Step ${i + 1} Pitch`;
+            stepDiv.appendChild(srLabelPitch);
+
+            sequencerGrid.appendChild(stepDiv);
+        }
+    }
 
     // --- MIDI Setup ---
     function setupMidi() {
