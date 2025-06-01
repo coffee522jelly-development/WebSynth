@@ -487,24 +487,47 @@ document.addEventListener('DOMContentLoaded', () => {
     startButton.addEventListener('click', () => {
         if (!audioContext) {
             initAudio();
-            // Establish filterNode -> masterGain connection once globally.
+        }
+
+        if (audioContext.state === 'suspended') {
+            audioContext.resume().then(() => {
+                console.log('AudioContext resumed successfully.');
+                if (filterNode && masterGain) {
+                    filterNode.connect(masterGain);
+                    // console.log('Global connection: filterNode -> masterGain established post-resume.');
+                } else {
+                    // console.error('filterNode or masterGain not ready for global connection post-resume.');
+                }
+                setupMidi();
+
+                if (seqPlayPauseButton) {
+                    seqPlayPauseButton.disabled = false;
+                    // console.log('DEBUG_SEQ_PLAY_BTN: Sequencer Play/Pause button explicitly enabled.');
+                } else {
+                    // console.error('DEBUG_SEQ_PLAY_BTN: seqPlayPauseButton element not found when trying to enable it (after resume).');
+                }
+                // console.log('Synthesizer fully initialized and ready after AudioContext resume.');
+
+            }).catch(e => console.error("Error resuming AudioContext:", e));
+        } else if (audioContext.state === 'running') {
+            // console.log('AudioContext already running.');
             if (filterNode && masterGain) {
                 filterNode.connect(masterGain);
-                console.log('Global connection: filterNode -> masterGain established.');
-            } else {
-                console.error('filterNode or masterGain not ready for global connection.');
+                 // console.log('Global connection: filterNode -> masterGain (context already running).');
             }
-            setupMidi(); // Setup MIDI after audio context and main connections are ready.
-        } else if (audioContext.state === 'suspended') {
-            audioContext.resume().then(() => {
-                console.log('AudioContext resumed.');
-                // It's good practice to ensure MIDI is still good or re-init if necessary,
-                // but for now, just resuming context. setupMidi() might need to be more robust
-                // to handle being called multiple times or checking existing state.
-            });
+            setupMidi();
+            if (seqPlayPauseButton) {
+                 seqPlayPauseButton.disabled = false;
+                 // console.log('DEBUG_SEQ_PLAY_BTN: Sequencer Play/Pause button explicitly enabled (context already running).');
+            } else {
+                // console.error('DEBUG_SEQ_PLAY_BTN: seqPlayPauseButton element not found when trying to enable it (context already running).');
+            }
+            // console.log('Synthesizer ready (AudioContext already running).');
+        } else {
+            console.error(`Unexpected AudioContext state: ${audioContext.state}. Sequencer functions might not work.`);
         }
+
         startButton.style.display = 'none';
-        console.log('Synthesizer started/resumed by user gesture.');
     }, { once: true });
 
     document.body.appendChild(startButton);
@@ -537,19 +560,30 @@ document.addEventListener('DOMContentLoaded', () => {
         createSequencerGrid();
 
         // Setup Event Listeners
-        seqPlayPauseButton.addEventListener('click', () => {
-            isPlaying = !isPlaying;
-            if (isPlaying) {
-                seqPlayPauseButton.textContent = 'Pause';
-                seqPlayPauseButton.classList.add('playing');
-                currentStep = 0; // Reset to start when playing from a stopped state. Consider if resuming is needed.
-                startSequencerPlayback();
-            } else {
-                seqPlayPauseButton.textContent = 'Play';
-                seqPlayPauseButton.classList.remove('playing');
-                stopSequencerPlayback();
-            }
-        });
+        if (seqPlayPauseButton) {
+            // console.log('DEBUG_SEQ_PLAY_BTN: Attaching listener to Play/Pause button.');
+            seqPlayPauseButton.addEventListener('click', () => {
+                // console.log('DEBUG_SEQ_PLAY_BTN: Sequencer Play/Pause button clicked.');
+                isPlaying = !isPlaying;
+                // console.log(`DEBUG_SEQ_PLAY_BTN: isPlaying state toggled to: ${isPlaying}`);
+
+                if (isPlaying) {
+                    seqPlayPauseButton.textContent = 'Pause';
+                    seqPlayPauseButton.classList.add('playing');
+                    currentStep = 0;
+                    // console.log('DEBUG_SEQ_PLAY_BTN: Attempting to call startSequencerPlayback.');
+                    startSequencerPlayback();
+                } else {
+                    seqPlayPauseButton.textContent = 'Play';
+                    seqPlayPauseButton.classList.remove('playing');
+                    // console.log('DEBUG_SEQ_PLAY_BTN: Attempting to call stopSequencerPlayback.');
+                    stopSequencerPlayback();
+                }
+            });
+        } else {
+            // console.error('DEBUG_SEQ_PLAY_BTN: seqPlayPauseButton element NOT FOUND when trying to attach listener!');
+        }
+
 
         currentTempo = parseInt(seqTempoSlider.value);
         seqTempoValueDisplay.textContent = `${currentTempo} BPM`;
@@ -575,24 +609,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     function startSequencerPlayback() {
+        // console.log('DEBUG_SEQ_PLAY_BTN: startSequencerPlayback function entered.');
         if (timerID) {
             clearInterval(timerID);
         }
         const beatsPerSecond = currentTempo / 60;
         const intervalMilliseconds = (1 / (beatsPerSecond * STEPS_PER_BEAT)) * 1000;
-        // console.log(`DEBUG: startSequencerPlayback - Tempo: ${currentTempo}, Interval: ${intervalMilliseconds}ms`);
 
-        if (isPlaying && audioContext && audioContext.state === 'running') { // Ensure context is running before first playStep
+        if (isPlaying && audioContext && audioContext.state === 'running') {
             playStep();
+        } else if (isPlaying) {
+            // console.warn("DEBUG_SEQ_PLAY_BTN: startSequencerPlayback called while isPlaying is true, but AudioContext is not running.");
         }
 
         timerID = setInterval(playStep, intervalMilliseconds);
     }
 
     function stopSequencerPlayback() {
+        // console.log('DEBUG_SEQ_PLAY_BTN: stopSequencerPlayback function entered.');
         clearInterval(timerID);
-        timerID = null; // Important to nullify to allow restart
-        // isPlaying = false; // This should be handled by the play/pause button logic primarily
+        timerID = null;
 
         const allStepElements = document.querySelectorAll('.sequencer-step');
         allStepElements.forEach(el => el.classList.remove('active-step'));
