@@ -29,6 +29,32 @@ document.addEventListener('DOMContentLoaded', () => {
     // Metronome State
     let isMetronomeOn = false;
 
+    // --- Drum Sound Parameters ---
+    let drumSoundParams = {
+        bd: { // Bass Drum
+            startPitch: 150,    // Hz
+            endPitch: 50,       // Hz
+            pitchEnvDuration: 0.15, // seconds
+            gainEnvDecay: 0.25,   // seconds
+            volume: 0.7         // 0.0 to 1.0
+        },
+        sn: { // Snare
+            noiseDuration: 0.15, // seconds. Note: playSnare currently uses 0.2 for buffer, 0.15 for decay
+            noiseFilterFreq: 1500, // Hz
+            noiseFilterQ: 15,
+            tonePitch: 200,      // Hz
+            toneEnvDecay: 0.12,  // seconds
+            noiseVolume: 0.8,    // As per prompt's example structure
+            toneVolume: 0.7      // 0.0 to 1.0
+        },
+        hh: { // Hi-Hat
+            noiseDuration: 0.06, // seconds. Note: playHiHat currently uses 0.08 for buffer, 0.06 for decay
+            filterFreq: 8000,   // Hz
+            filterQ: 5,
+            volume: 0.5         // As per prompt's example structure
+        }
+    };
+
     // --- Drum Machine Specific Variables ---
     let drumMachineGridElement;
     let drumMachineData = []; // Stores the state of each drum step (0=off, 1=BD, 2=HH, 3=SN)
@@ -78,109 +104,15 @@ document.addEventListener('DOMContentLoaded', () => {
         setupKeyboard();
         setupSequencer();
         setupDrumMachine(); // Initialize drum machine UI and data
+        setupDrumEditor(); // Initialize drum editor UI and logic
         // setupMetronomeControls() is called in the startButton listener after context is running.
 
         console.log('Synthesizer setup complete.');
     }
 
     // --- Oscillator ---
-    // Drum sound synthesis functions are placed before setupOscillator for definition before potential use.
-    // (Although they are typically called by sequencer or other UI, not directly by setup functions before them)
-
-    function playBassDrum() {
-        if (!audioContext || audioContext.state !== 'running' || !masterGain) return;
-        const now = audioContext.currentTime;
-        const osc = audioContext.createOscillator();
-        const gain = audioContext.createGain();
-
-        osc.type = 'triangle'; // Good for punchy bass
-        osc.frequency.setValueAtTime(150, now); // Start fairly high for the "thump"
-        osc.frequency.exponentialRampToValueAtTime(50, now + 0.15); // Quick drop to the fundamental
-
-        gain.gain.setValueAtTime(0.9, now); // Start with high gain
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.25); // Decay over ~250ms
-
-        osc.connect(gain);
-        gain.connect(masterGain);
-
-        osc.start(now);
-        osc.stop(now + 0.3); // Stop osc slightly after gain envelope finishes
-    }
-
-    function playSnare() {
-        if (!audioContext || audioContext.state !== 'running' || !masterGain) return;
-        const now = audioContext.currentTime;
-
-        // Noise component for the "snap"
-        const noiseBufferSize = audioContext.sampleRate * 0.2; // 0.2 seconds of noise
-        const noiseBuffer = audioContext.createBuffer(1, noiseBufferSize, audioContext.sampleRate);
-        const noiseOutput = noiseBuffer.getChannelData(0);
-        for (let i = 0; i < noiseBufferSize; i++) {
-            noiseOutput[i] = (Math.random() * 2 - 1) * 0.6; // Adjust noise volume
-        }
-        const noiseSource = audioContext.createBufferSource();
-        noiseSource.buffer = noiseBuffer;
-
-        const noiseFilter = audioContext.createBiquadFilter();
-        noiseFilter.type = 'bandpass';
-        noiseFilter.frequency.setValueAtTime(1500, now); // Center frequency for snare character
-        noiseFilter.Q.setValueAtTime(15, now); // Higher Q for more resonance/sharper snap
-
-        const noiseGain = audioContext.createGain();
-        noiseGain.gain.setValueAtTime(0.8, now); // Noise component volume
-        noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.15); // Quick decay for noise
-
-        noiseSource.connect(noiseFilter);
-        noiseFilter.connect(noiseGain);
-        noiseGain.connect(masterGain);
-
-        // Tonal component for the "body"
-        const toneOsc = audioContext.createOscillator();
-        toneOsc.type = 'triangle';
-        toneOsc.frequency.setValueAtTime(200, now); // Pitch of the snare's body
-
-        const toneGain = audioContext.createGain();
-        toneGain.gain.setValueAtTime(0.7, now); // Tone component volume
-        toneGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12); // Slightly shorter decay for tone
-
-        toneOsc.connect(toneGain);
-        toneGain.connect(masterGain);
-
-        noiseSource.start(now);
-        toneOsc.start(now);
-        noiseSource.stop(now + 0.2); // Stop buffer after envelope
-        toneOsc.stop(now + 0.15);    // Stop tone osc after envelope
-    }
-
-    function playHiHat() {
-        if (!audioContext || audioContext.state !== 'running' || !masterGain) return;
-        const now = audioContext.currentTime;
-
-        const noiseBufferSize = audioContext.sampleRate * 0.08; // Shorter for hi-hat
-        const noiseBuffer = audioContext.createBuffer(1, noiseBufferSize, audioContext.sampleRate);
-        const noiseOutput = noiseBuffer.getChannelData(0);
-        for (let i = 0; i < noiseBufferSize; i++) {
-            noiseOutput[i] = (Math.random() * 2 - 1) * 0.4; // Adjust noise volume
-        }
-        const noiseSource = audioContext.createBufferSource();
-        noiseSource.buffer = noiseBuffer;
-
-        const hiPassFilter = audioContext.createBiquadFilter();
-        hiPassFilter.type = 'highpass';
-        hiPassFilter.frequency.setValueAtTime(7000, now); // High frequency for "tsss" sound
-        hiPassFilter.Q.setValueAtTime(5, now); // Moderate Q
-
-        const gain = audioContext.createGain();
-        gain.gain.setValueAtTime(0.4, now); // Hi-hat volume
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.06); // Very sharp decay
-
-        noiseSource.connect(hiPassFilter);
-        hiPassFilter.connect(gain);
-        gain.connect(masterGain);
-
-        noiseSource.start(now);
-        noiseSource.stop(now + 0.1); // Stop buffer slightly after gain envelope
-    }
+    // Drum sound synthesis functions are defined above setupOscillator
+    // This section is intentionally left blank as the duplicate functions below will be removed.
 
     function setupOscillator() {
         const waveformRadios = document.querySelectorAll('input[name="waveform"]');
@@ -219,96 +151,110 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Drum Sound Synthesis ---
+    // This section was removed as it was a duplicate. The first set of drum functions (now modified) is kept.
+
+    // --- Drum Sound Synthesis Functions (using drumSoundParams) ---
     function playBassDrum() {
         if (!audioContext || audioContext.state !== 'running' || !masterGain) return;
         const now = audioContext.currentTime;
+        const params = drumSoundParams.bd;
+
         const osc = audioContext.createOscillator();
-        const gain = audioContext.createGain();
+        const gainNode = audioContext.createGain();
 
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(150, now);
-        osc.frequency.exponentialRampToValueAtTime(50, now + 0.15);
+        osc.type = 'sine'; // BD usually sine or triangle
+        osc.frequency.setValueAtTime(params.startPitch, now);
+        osc.frequency.exponentialRampToValueAtTime(params.endPitch, now + params.pitchEnvDuration);
 
-        gain.gain.setValueAtTime(0.8, now);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.25);
+        gainNode.gain.setValueAtTime(params.volume, now);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, now + params.gainEnvDecay);
 
-        osc.connect(gain);
-        gain.connect(masterGain);
+        osc.connect(gainNode);
+        gainNode.connect(masterGain);
 
         osc.start(now);
-        osc.stop(now + 0.3);
+        osc.stop(now + params.gainEnvDecay + 0.1); // Stop a bit after envelope finishes
     }
 
     function playSnare() {
         if (!audioContext || audioContext.state !== 'running' || !masterGain) return;
         const now = audioContext.currentTime;
+        const params = drumSoundParams.sn;
 
-        const bufferSize = audioContext.sampleRate * 0.2;
-        const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+        // Noise component
+        const noiseBuffer = audioContext.createBuffer(1, audioContext.sampleRate * params.noiseDuration, audioContext.sampleRate);
         const output = noiseBuffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) {
-            output[i] = (Math.random() * 2 - 1) * 0.5;
+        for (let i = 0; i < output.length; i++) {
+            output[i] = (Math.random() * 2 - 1); // White noise
         }
+
         const noiseSource = audioContext.createBufferSource();
         noiseSource.buffer = noiseBuffer;
 
         const noiseFilter = audioContext.createBiquadFilter();
         noiseFilter.type = 'bandpass';
-        noiseFilter.frequency.setValueAtTime(1500, now);
-        noiseFilter.Q.setValueAtTime(10, now);
+        noiseFilter.frequency.setValueAtTime(params.noiseFilterFreq, now);
+        noiseFilter.Q.setValueAtTime(params.noiseFilterQ, now);
 
         const noiseGain = audioContext.createGain();
-        noiseGain.gain.setValueAtTime(0.8, now);
-        noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.15);
+        noiseGain.gain.setValueAtTime(params.noiseVolume, now);
+        noiseGain.gain.exponentialRampToValueAtTime(0.001, now + params.noiseDuration); // Use noiseDuration for decay
 
         noiseSource.connect(noiseFilter);
         noiseFilter.connect(noiseGain);
         noiseGain.connect(masterGain);
 
+        // Tone component (optional, can be made more prominent if desired)
         const toneOsc = audioContext.createOscillator();
         toneOsc.type = 'triangle';
-        toneOsc.frequency.setValueAtTime(200, now);
+        toneOsc.frequency.setValueAtTime(params.tonePitch, now);
 
         const toneGain = audioContext.createGain();
-        toneGain.gain.setValueAtTime(0.7, now);
-        toneGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.1);
+        toneGain.gain.setValueAtTime(params.toneVolume, now);
+        toneGain.gain.exponentialRampToValueAtTime(0.001, now + params.toneEnvDecay);
 
         toneOsc.connect(toneGain);
         toneGain.connect(masterGain);
 
         noiseSource.start(now);
         toneOsc.start(now);
-        noiseSource.stop(now + 0.2);
-        toneOsc.stop(now + 0.15);
+
+        noiseSource.stop(now + params.noiseDuration + 0.1);
+        toneOsc.stop(now + params.toneEnvDecay + 0.1);
     }
 
     function playHiHat() {
         if (!audioContext || audioContext.state !== 'running' || !masterGain) return;
         const now = audioContext.currentTime;
+        const params = drumSoundParams.hh;
 
-        const bufferSize = audioContext.sampleRate * 0.08;
-        const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+        // Using very short noise bursts, filtered
+        const noiseBuffer = audioContext.createBuffer(1, audioContext.sampleRate * params.noiseDuration, audioContext.sampleRate);
         const output = noiseBuffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) {
-            output[i] = (Math.random() * 2 - 1) * 0.3;
+        for (let i = 0; i < output.length; i++) {
+            output[i] = (Math.random() * 2 - 1);
         }
+
         const noiseSource = audioContext.createBufferSource();
         noiseSource.buffer = noiseBuffer;
 
-        const hiPassFilter = audioContext.createBiquadFilter();
-        hiPassFilter.type = 'highpass';
-        hiPassFilter.frequency.setValueAtTime(8000, now);
+        const bandpassFilter = audioContext.createBiquadFilter();
+        bandpassFilter.type = 'highpass'; // Often highpass for HH
+        bandpassFilter.frequency.setValueAtTime(params.filterFreq, now);
+        bandpassFilter.Q.setValueAtTime(params.filterQ, now); // Q has less effect on highpass than bandpass
 
-        const gain = audioContext.createGain();
-        gain.gain.setValueAtTime(0.4, now);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.06);
+        const gainNode = audioContext.createGain();
+        gainNode.gain.setValueAtTime(params.volume, now);
+        // Very sharp decay for hi-hat
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, now + params.noiseDuration);
 
-        noiseSource.connect(hiPassFilter);
-        hiPassFilter.connect(gain);
-        gain.connect(masterGain);
+
+        noiseSource.connect(bandpassFilter);
+        bandpassFilter.connect(gainNode);
+        gainNode.connect(masterGain);
 
         noiseSource.start(now);
-        noiseSource.stop(now + 0.1);
+        noiseSource.stop(now + params.noiseDuration + 0.1); // Stop a bit after envelope
     }
 
 
@@ -1160,6 +1106,112 @@ document.addEventListener('DOMContentLoaded', () => {
     function onMIDIFailure(msg) {
         console.error(`Failed to get MIDI access - ${msg}`);
     }
+
+    // --- Drum Editor UI Logic ---
+    function setupDrumEditor() {
+        const tabButtons = document.querySelectorAll('#drum-editor-panel .tab-button');
+        const tabContents = document.querySelectorAll('#drum-editor-panel .tab-content');
+
+        tabButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const targetTabId = button.dataset.tabTarget;
+
+                // Deactivate all tabs and hide all content
+                tabButtons.forEach(btn => btn.classList.remove('active-tab'));
+                tabContents.forEach(content => content.style.display = 'none');
+
+                // Activate clicked tab and show its content
+                button.classList.add('active-tab');
+                const targetContent = document.getElementById(targetTabId);
+                if (targetContent) {
+                    targetContent.style.display = 'block';
+                } else {
+                    console.error(`Drum editor tab content not found: #${targetTabId}`);
+                }
+            });
+        });
+
+        // Populate each tab with controls
+        const drumTypes = ['bd', 'sn', 'hh'];
+        drumTypes.forEach(drumType => {
+            const containerId = `drum-editor-${drumType}`; // e.g., drum-editor-bd
+            const containerElement = document.getElementById(containerId);
+            if (containerElement) {
+                populateDrumEditorTab(drumType, containerElement);
+            } else {
+                console.error(`Container for drum editor tab not found: #${containerId}`);
+            }
+        });
+        console.log("Drum Editor setup complete.");
+    }
+
+    function populateDrumEditorTab(drumType, containerElement) {
+        containerElement.innerHTML = ''; // Clear any placeholder content
+        const params = drumSoundParams[drumType];
+        if (!params) {
+            console.error(`No parameters found for drum type: ${drumType}`);
+            return;
+        }
+
+        for (const paramName in params) {
+            if (Object.hasOwnProperty.call(params, paramName)) {
+                const value = params[paramName];
+
+                const controlGroup = document.createElement('div');
+                controlGroup.classList.add('control-group');
+
+                const label = document.createElement('label');
+                label.textContent = `${paramName.charAt(0).toUpperCase() + paramName.slice(1).replace(/([A-Z])/g, ' $1')}: `; // Simple label formatting
+                label.htmlFor = `drum-${drumType}-${paramName}`;
+                controlGroup.appendChild(label);
+
+                const input = document.createElement('input');
+                input.type = 'range'; // Default to range, can be adjusted
+                input.id = `drum-${drumType}-${paramName}`;
+                input.name = `drum-${drumType}-${paramName}`;
+                input.value = value;
+
+                // Define min/max/step based on typical ranges for these params
+                // These are educated guesses and might need refinement
+                if (paramName.toLowerCase().includes('pitch')) {
+                    input.min = 20; input.max = 2000; input.step = 1;
+                } else if (paramName.toLowerCase().includes('duration') || paramName.toLowerCase().includes('decay')) {
+                    input.min = 0.01; input.max = 1.0; input.step = 0.01;
+                } else if (paramName.toLowerCase().includes('volume')) {
+                    input.min = 0; input.max = 1; input.step = 0.01;
+                } else if (paramName.toLowerCase().includes('freq')) { // Filter frequency
+                    input.min = 100; input.max = 10000; input.step = 10;
+                } else if (paramName.toLowerCase().includes('q')) { // Filter Q
+                    input.min = 0.1; input.max = 20; input.step = 0.1;
+                } else {
+                    // Default generic range for unknown params
+                    input.min = 0; input.max = 100; input.step = 1;
+                }
+                // Special case for very small values like gain env decay end value if it were 0.001
+                if (value < 0.01 && value > 0) input.step = 0.001;
+
+
+                const valueDisplay = document.createElement('span');
+                valueDisplay.textContent = value;
+                valueDisplay.classList.add('param-value-display');
+
+                input.addEventListener('input', (e) => {
+                    let newValue = parseFloat(e.target.value);
+                    if (input.step < 1) { // For decimal steps, avoid excessive precision from parseFloat
+                        newValue = parseFloat(newValue.toFixed(input.step.toString().split('.')[1]?.length || 3));
+                    }
+                    drumSoundParams[drumType][paramName] = newValue;
+                    valueDisplay.textContent = newValue;
+                    // console.log(`Drum param ${drumType}.${paramName} updated to: ${newValue}`);
+                });
+
+                controlGroup.appendChild(input);
+                controlGroup.appendChild(valueDisplay);
+                containerElement.appendChild(controlGroup);
+            }
+        }
+    }
+
 
     function handleMidiMessage(event) {
         if (!event.data || event.data.length < 2) {

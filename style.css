@@ -555,3 +555,168 @@ body > button:hover {
     box-shadow: inset 0 0 6px rgba(255, 165, 0, 0.6); /* Inner glow */
     /* Ensure this doesn't clash too much with the drum type colors */
 }
+
+
+/* Drum Editor Panel Styling */
+#drum-editor-panel {
+    background-color: #444; /* Consistent with other main panels */
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    margin-top: 30px;
+    width: 95%;
+    max-width: 1000px; /* Consistent with other main panels */
+    color: #fff;
+}
+
+#drum-editor-panel h2 { /* Should inherit from #control-panel h2 if selectors are similar, but can be explicit */
+    margin-top: 0;
+    font-size: 1.3em;
+    color: #FFA500; /* Orange theme */
+    border-bottom: 1px solid #CC8400; /* Darker Orange */
+    padding-bottom: 5px;
+    margin-bottom: 15px;
+}
+
+.tab-navigation {
+    display: flex;
+    margin-bottom: -1px; /* To make active tab border merge with content border */
+    position: relative;
+    z-index: 1; /* Ensure tabs are above the content border */
+}
+
+.tab-button {
+    padding: 10px 15px;
+    cursor: pointer;
+    background-color: #555; /* Inactive tab background */
+    color: #ccc;
+    border: 1px solid #666; /* Match section borders */
+    border-bottom: none;
+    margin-right: 5px;
+    border-radius: 4px 4px 0 0;
+    font-size: 0.9em;
+    outline: none;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.tab-button:hover {
+    background-color: #6a6a6a;
+    color: #fff;
+}
+
+.tab-button.active-tab {
+    background-color: #3a3a3a; /* Match tab content background */
+    color: #FFA500; /* Orange theme for active tab text */
+    font-weight: bold;
+    border-color: #CC8400; /* Darker orange to match heading underlines */
+    /* border-bottom-color: #3a3a3a; /* Make bottom border same as content bg to merge */
+}
+
+.tab-content {
+    padding: 20px; /* More padding for content area */
+    border: 1px solid #CC8400; /* Match active tab border */
+    background-color: #3a3a3a; /* Slightly different from panel to stand out */
+    border-radius: 0 4px 4px 4px; /* Rounded corners, except top-left where tab meets */
+    /* display: none; /* JS will handle visibility; initial visibility set in HTML */
+}
+
+.tab-content.active-content {
+    display: block; /* JS will toggle this if a class-based approach is used instead of inline styles */
+}
+
+/* Placeholder styling for controls within tabs */
+.tab-content h3 {
+    margin-top: 0;
+    font-size: 1.1em;
+    color: #FFA500;
+    margin-bottom: 15px;
+    border-bottom: 1px solid #555;
+    padding-bottom: 8px;
+}
+
+.tab-content .control-group {
+    margin-bottom: 12px; /* Slightly reduced margin */
+    display: flex;
+    flex-wrap: wrap; /* Allow wrapping for responsiveness */
+    align-items: center;
+    gap: 8px 12px; /* Row gap and column gap */
+    padding: 8px;
+    background-color: #4f4f4f; /* Slightly lighter shade for control groups */
+    border-radius: 4px;
+}
+
+.tab-content .control-group label {
+    flex-basis: 140px; /* Fixed base width for labels */
+    flex-shrink: 0; /* Prevent label from shrinking */
+    color: #ddd;
+    font-size: 0.9em;
+    padding-right: 5px; /* Space between label and input */
+}
+
+/* General styling for inputs within drum editor tabs */
+.tab-content .control-group input[type="range"],
+.tab-content .control-group input[type="number"] {
+    flex-grow: 1; /* Allow input to take available space */
+    min-width: 100px; /* Minimum width for inputs before wrapping */
+    height: 20px; /* Consistent height for sliders */
+    background: #333; /* Match global slider track */
+    border: 1px solid #666; /* Match global input border */
+    border-radius: 4px;
+    color: #fff; /* Text color for number input */
+    padding: 2px 5px; /* Padding for number input */
+    box-sizing: border-box;
+}
+
+/* Specifics for range inputs, inheriting from global where possible */
+.tab-content .control-group input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    padding: 0; /* Remove padding for range inputs */
+    /* Height and background already set above */
+}
+
+.tab-content .control-group input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px; /* Slightly smaller thumb for tabs */
+    height: 16px;
+    background: #FFA500; /* Orange */
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid #222;
+}
+
+.tab-content .control-group input[type="range"]::-moz-range-thumb {
+    width: 14px; /* Slightly smaller thumb for tabs */
+    height: 14px;
+    background: #FFA500; /* Orange */
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid #222;
+}
+
+.tab-content .control-group input[type="number"] {
+    width: 70px; /* Fixed width for number inputs */
+    flex-grow: 0; /* Don't allow number input to grow */
+    text-align: right;
+    -moz-appearance: textfield; /* Hide spinners in Firefox */
+}
+
+.tab-content .control-group input[type="number"]::-webkit-inner-spin-button,
+.tab-content .control-group input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0; /* Hide spinners in Chrome/Safari/Edge */
+}
+
+.param-value-display {
+    flex-basis: 50px; /* Fixed width for value display */
+    flex-shrink: 0; /* Prevent shrinking */
+    font-size: 0.85em;
+    color: #FFA500; /* Orange to match accents */
+    font-family: 'Courier New', Courier, monospace;
+    text-align: right;
+    padding: 5px;
+    background-color: #3a3a3a; /* Match tab content background */
+    border-radius: 3px;
+    min-width: 40px; /* Minimum width */
+}
